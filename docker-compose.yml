@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: carduser
+      POSTGRES_PASSWORD: cardpass
+      POSTGRES_DB: carddb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/init.sql:/app/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carduser -d carddb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  backend:
+    build: ./backend
+    restart: always
+    environment:
+      DATABASE_URL: postgres://carduser:cardpass@db:5432/carddb
+    ports:
+      - "4000:4000"
+    depends_on:
+      - db
+volumes:
+  pgdata:

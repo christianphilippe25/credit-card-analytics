@@ -5,7 +5,7 @@ import CSVUpload from './CSVUpload';
 import ExpenseTable from './ExpenseTable';
 import ExpenseSummary from './ExpenseSummary';
 import ExpenseCharts from './ExpenseCharts';
-import { parseCSV } from './csvUtils';
+// import { parseCSV } from './csvUtils';
 import './App.css';
 
 const CATEGORY_KEY = 'expense-categories-memory';
@@ -15,9 +15,7 @@ function App() {
   const [months, setMonths] = useState([]); // [{name, expenses}]
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [categoryMemory, setCategoryMemory] = useState({});
-  const [categories, setCategories] = useState([
-    'Alimentação', 'Transporte', 'Compras', 'Contas', 'Outro', 'assinatura', 'pet', 'carro', 'casa', 'Saúde'
-  ]);
+  const [categories, setCategories] = useState([]);
   const [newCategory, setNewCategory] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [hideValues, setHideValues] = useState(false);
@@ -25,44 +23,51 @@ function App() {
   useEffect(() => {
     const mem = localStorage.getItem(CATEGORY_KEY);
     if (mem) setCategoryMemory(JSON.parse(mem));
-    const cat = localStorage.getItem('expense-categories-list');
-    if (cat) setCategories(JSON.parse(cat));
+    fetchCategories();
+    fetchExpenses();
   }, []);
 
   useEffect(() => {
     localStorage.setItem(CATEGORY_KEY, JSON.stringify(categoryMemory));
   }, [categoryMemory]);
 
-  useEffect(() => {
-    localStorage.setItem('expense-categories-list', JSON.stringify(categories));
-  }, [categories]);
+
+  // Busca categorias do backend
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('http://localhost:4000/api/categories');
+      if (!res.ok) throw new Error('Erro ao buscar categorias');
+      const data = await res.json();
+      setCategories(data.map(c => c.name));
+    } catch (err) {
+      alert('Erro ao buscar categorias: ' + err.message);
+    }
+  };
 
 
   // Save/load expenses to localStorage
   const EXPENSES_KEY = 'expense-saved-list';
 
-  const handleCSV = (text, fileName) => {
-    let parsed = parseCSV(text);
-    // Auto-categorize from memory
-    parsed = parsed.map(exp => ({
-      ...exp,
-      category: categoryMemory[exp.title] || ''
-    }));
-    // Try to infer month from data or filename
-    let month = '';
-    if (parsed.length && parsed[0].date) {
-      month = parsed[0].date.slice(0, 7); // YYYY-MM
-    } else if (fileName) {
-      const m = fileName.match(/\d{4}-\d{2}/);
-      if (m) month = m[0];
-      else month = fileName;
+
+  // Busca despesas do backend
+  const fetchExpenses = async () => {
+    try {
+      const res = await fetch('http://localhost:4000/api/expenses');
+      if (!res.ok) throw new Error('Erro ao buscar despesas');
+      const data = await res.json();
+      // Agrupa por mês (YYYY-MM)
+      const grouped = {};
+      data.forEach(exp => {
+        const month = exp.date ? exp.date.slice(0, 7) : 'Desconhecido';
+        if (!grouped[month]) grouped[month] = [];
+        grouped[month].push(exp);
+      });
+      const monthsArr = Object.entries(grouped).map(([name, expenses]) => ({ name, expenses }));
+      setMonths(monthsArr);
+      setSelectedMonth(monthsArr.length ? monthsArr[0].name : null);
+    } catch (err) {
+      alert('Erro ao buscar despesas: ' + err.message);
     }
-    if (!month) month = `Month ${months.length + 1}`;
-    setMonths(prev => {
-      const updated = [...prev, { name: month, expenses: parsed }];
-      setSelectedMonth(month);
-      return updated;
-    });
   };
 
 
@@ -107,12 +112,40 @@ function App() {
     });
   };
 
-  const handleAddCategory = (e) => {
+  const handleAddCategory = async (e) => {
     e.preventDefault();
     const cat = newCategory.trim();
-    if (cat && !categories.includes(cat)) {
-      setCategories([...categories, cat]);
+    if (!cat) return;
+    try {
+      const res = await fetch('http://localhost:4000/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: cat })
+      });
+      if (res.status === 409) {
+        alert('Categoria já existe');
+        return;
+      }
+      if (!res.ok) throw new Error('Erro ao adicionar categoria');
       setNewCategory('');
+      fetchCategories();
+    } catch (err) {
+      alert('Erro ao adicionar categoria: ' + err.message);
+    }
+  };
+
+  // Remover categoria (opcional, botão ao lado de cada categoria)
+  const handleRemoveCategory = async (catName) => {
+    try {
+      // Buscar id da categoria
+      const res = await fetch('http://localhost:4000/api/categories');
+      const data = await res.json();
+      const cat = data.find(c => c.name === catName);
+      if (!cat) return;
+      await fetch(`http://localhost:4000/api/categories/${cat.id}`, { method: 'DELETE' });
+      fetchCategories();
+    } catch (err) {
+      alert('Erro ao remover categoria: ' + err.message);
     }
   };
 
@@ -175,7 +208,7 @@ function App() {
         marginRight: 'auto',
       }}>
         <div style={{width: '100%'}}>
-          <CSVUpload onData={(text, file) => handleCSV(text, file?.name)} />
+      <CSVUpload onUpload={fetchExpenses} />
         </div>
         <button onClick={handleSaveExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#4caf50', color: '#fff', fontWeight: 600}}>Save Results</button>
         <button onClick={handleLoadExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#2196f3', color: '#fff', fontWeight: 600}}>Load Saved</button>
@@ -213,6 +246,14 @@ function App() {
           style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', width: '100%'}}
         />
         <button type="submit" style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#646cff', color: '#fff', fontWeight: 600}}>Add Category</button>
+        <div style={{width: '100%', marginTop: 8}}>
+          {categories.map(cat => (
+            <span key={cat} style={{display:'inline-block', background:'#eee', borderRadius:4, padding:'2px 8px', margin:'2px', fontSize:13}}>
+              {cat}
+              <button type="button" onClick={() => handleRemoveCategory(cat)} style={{marginLeft:4, color:'#c00', background:'none', border:'none', cursor:'pointer'}}>×</button>
+            </span>
+          ))}
+        </div>
       </form>
 
       {months.length > 0 && (() => {
