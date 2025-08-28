@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import dotenv from 'dotenv';
-import { Pool } from 'pg';
+import db from '../models/index.cjs';
 import { parse } from 'csv-parse';
 import fs from 'fs';
 
@@ -12,9 +12,7 @@ dotenv.config();
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://carduser:cardpass@localhost:5432/carddb',
-});
+
 
 app.use(cors());
 app.use(express.json());
@@ -94,8 +92,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // List all categories
 app.get('/api/categories', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM categories ORDER BY name ASC');
-    res.json(rows);
+    const categories = await db.Category.findAll({ order: [['name', 'ASC']] });
+    res.json(categories);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -106,14 +104,11 @@ app.post('/api/categories', async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Category name required' });
   try {
-    const { rows } = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [name]);
-    res.status(201).json(rows[0]);
+    const [cat, created] = await db.Category.findOrCreate({ where: { name } });
+    if (!created) return res.status(409).json({ error: 'Category already exists' });
+    res.status(201).json(cat);
   } catch (err) {
-    if (err.code === '23505') {
-      res.status(409).json({ error: 'Category already exists' });
-    } else {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -121,8 +116,8 @@ app.post('/api/categories', async (req, res) => {
 app.delete('/api/categories/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM categories WHERE id = $1', [id]);
-    res.json({ success: true });
+    const deleted = await db.Category.destroy({ where: { id } });
+    res.json({ success: !!deleted });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -132,8 +127,8 @@ app.delete('/api/categories/:id', async (req, res) => {
 app.get('/api/expenses', authMiddleware, async (req, res) => {
   const user_id = req.user.id;
   try {
-    const { rows } = await pool.query('SELECT * FROM expenses WHERE user_id = $1 ORDER BY date DESC', [user_id]);
-    res.json(rows);
+    const expenses = await db.Expense.findAll({ where: { userId: user_id }, order: [['date', 'DESC']] });
+    res.json(expenses);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -147,23 +142,19 @@ app.post('/api/expenses', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Array de despesas obrigatório' });
   }
   try {
+    let count = 0;
     for (const exp of expenses) {
       const amount = typeof exp.amount === 'string' ? parseFloat(exp.amount.replace(/[^\d.-]/g, '')) : exp.amount;
       const desc = exp.description || exp.title;
       const date = exp.date;
       // Checa duplicidade
-      const { rows: exists } = await pool.query(
-        'SELECT 1 FROM expenses WHERE user_id = $1 AND description = $2 AND amount = $3 AND date = $4',
-        [user_id, desc, amount, date]
-      );
-      if (exists.length === 0) {
-        await pool.query(
-          'INSERT INTO expenses (user_id, description, amount, date, category) VALUES ($1, $2, $3, $4, $5)',
-          [user_id, desc, amount, date, exp.category || null]
-        );
+      const exists = await db.Expense.findOne({ where: { userId: user_id, description: desc, amount, date } });
+      if (!exists) {
+        await db.Expense.create({ userId: user_id, description: desc, amount, date, category: exp.category || null });
+        count++;
       }
     }
-    res.json({ success: true, count: expenses.length });
+    res.json({ success: true, count });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -182,12 +173,14 @@ app.post('/api/memory', authMiddleware, async (req, res) => {
   if (!user_id || !description || !category) return res.status(400).json({ error: 'user_id, description e category obrigatórios' });
   const normDesc = normalizeDescription(description);
   try {
-    await pool.query(
-      `INSERT INTO expense_category_memory (user_id, description, category)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, description) DO UPDATE SET category = EXCLUDED.category`,
-      [user_id, normDesc, category]
-    );
+    const [mem, created] = await db.ExpenseCategoryMemory.findOrCreate({
+      where: { userId: user_id, description: normDesc },
+      defaults: { category }
+    });
+    if (!created) {
+      mem.category = category;
+      await mem.save();
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -201,15 +194,8 @@ app.get('/api/memory', authMiddleware, async (req, res) => {
   if (!user_id || !description) return res.status(400).json({ error: 'user_id e description obrigatórios' });
   const normDesc = normalizeDescription(description);
   try {
-    const { rows } = await pool.query(
-      'SELECT category FROM expense_category_memory WHERE user_id = $1 AND description = $2',
-      [user_id, normDesc]
-    );
-    if (rows.length) {
-      res.json({ category: rows[0].category });
-    } else {
-      res.json({ category: null });
-    }
+    const mem = await db.ExpenseCategoryMemory.findOne({ where: { userId: user_id, description: normDesc } });
+    res.json({ category: mem ? mem.category : null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -239,11 +225,12 @@ app.post('/api/register', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email e senha obrigatórios' });
   const hash = await bcrypt.hash(password, 10);
   try {
-    const { rows } = await pool.query('INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email', [email, hash]);
-    const token = generateToken(rows[0]);
+    const existing = await db.User.findOne({ where: { email } });
+    if (existing) return res.status(409).json({ error: 'Email já cadastrado' });
+    const user = await db.User.create({ email, password_hash: hash });
+    const token = generateToken(user);
     res.json({ token });
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email já cadastrado' });
     res.status(500).json({ error: err.message });
   }
 });
@@ -252,9 +239,8 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email e senha obrigatórios' });
-  const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-  if (!rows.length) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
-  const user = rows[0];
+  const user = await db.User.findOne({ where: { email } });
+  if (!user) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   if (!(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   const token = generateToken(user);
   res.json({ token });

@@ -16,8 +16,8 @@ export default function ExpenseTable({ expenses, onCategorize, categories = [], 
       <tbody>
         {expenses.map((exp, idx) => (
           <tr key={idx}>
-            <td>{exp.date}</td>
-            <td>{exp.title}</td>
+            <td>{new Date(exp.date).toLocaleDateString('pt-BR')}</td>
+            <td>{exp.description || exp.title}</td>
             <td>{hideValues ? '••••••' : exp.amount?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
             <td>
               <select

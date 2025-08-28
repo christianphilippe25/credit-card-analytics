@@ -1,14 +1,25 @@
+import AuthForm from './AuthForm';
 import FullSummary from './FullSummary';
 
 import { useState, useEffect } from 'react';
 import CSVUpload from './CSVUpload';
+import { parseCSV } from './csvUtils';
 import ExpenseTable from './ExpenseTable';
 import ExpenseSummary from './ExpenseSummary';
 import ExpenseCharts from './ExpenseCharts';
 // import { parseCSV } from './csvUtils';
 import './App.css';
 
-const CATEGORY_KEY = 'expense-categories-memory';
+// Utilitário para fetch autenticado
+function fetchAuth(url, options = {}, token) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
 
 
 function App() {
@@ -20,12 +31,55 @@ function App() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [hideValues, setHideValues] = useState(false);
 
+  const [token, setToken] = useState(getToken());
+
+  // Logout helper
+  const handleLogout = () => {
+    setToken('');
+    localStorage.removeItem('jwt_token');
+  };
+
+  const CATEGORY_KEY = 'expense-categories-memory';
+  function getToken() {
+    return localStorage.getItem('jwt_token') || '';
+  }
   useEffect(() => {
+    if (!token) return;
     const mem = localStorage.getItem(CATEGORY_KEY);
     if (mem) setCategoryMemory(JSON.parse(mem));
     fetchCategories();
     fetchExpenses();
-  }, []);
+  }, [token]);
+  // Novo: upload só carrega dados localmente e sugere categorias memorizadas
+  const handleCSV = async (text, file) => {
+    let parsed = parseCSV(text);
+    // Buscar categorias memorizadas para cada descrição
+    for (let i = 0; i < parsed.length; i++) {
+      const desc = parsed[i].title || parsed[i].description;
+      try {
+        const res = await fetchAuth(`http://localhost:4000/api/memory?description=${encodeURIComponent(desc)}`, {}, token);
+        const data = await res.json();
+        parsed[i].category = data.category || '';
+      } catch {
+        parsed[i].category = '';
+      }
+    }
+    // Tenta inferir mês
+    let month = '';
+    if (parsed.length && parsed[0].date) {
+      month = parsed[0].date.slice(0, 7); // YYYY-MM
+    } else if (file?.name) {
+      const m = file.name.match(/\d{4}-\d{2}/);
+      if (m) month = m[0];
+      else month = file.name;
+    }
+    if (!month) month = `Month ${months.length + 1}`;
+    setMonths(prev => {
+      const updated = [...prev, { name: month, expenses: parsed }];
+      setSelectedMonth(month);
+      return updated;
+    });
+  };
 
   useEffect(() => {
     localStorage.setItem(CATEGORY_KEY, JSON.stringify(categoryMemory));
@@ -35,7 +89,7 @@ function App() {
   // Busca categorias do backend
   const fetchCategories = async () => {
     try {
-      const res = await fetch('http://localhost:4000/api/categories');
+      const res = await fetchAuth('http://localhost:4000/api/categories', {}, token);
       if (!res.ok) throw new Error('Erro ao buscar categorias');
       const data = await res.json();
       setCategories(data.map(c => c.name));
@@ -52,9 +106,15 @@ function App() {
   // Busca despesas do backend
   const fetchExpenses = async () => {
     try {
-      const res = await fetch('http://localhost:4000/api/expenses');
+      const res = await fetchAuth('http://localhost:4000/api/expenses', {}, token);
       if (!res.ok) throw new Error('Erro ao buscar despesas');
       const data = await res.json();
+      // Corrigir amount para número
+      data.forEach(exp => {
+        exp.amount = exp.amount !== null && exp.amount !== undefined
+          ? Number(exp.amount)
+          : 0;
+      });
       // Agrupa por mês (YYYY-MM)
       const grouped = {};
       data.forEach(exp => {
@@ -71,13 +131,37 @@ function App() {
   };
 
 
-  const handleSaveExpenses = () => {
-    const saveObj = {
-      months,
-      categories
-    };
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(saveObj));
-    alert('Expenses and categories saved!');
+
+  // Novo: Salvar no backend apenas o mês selecionado e memorizar cruzamentos
+  const handleSaveExpenses = async () => {
+    const monthObj = months.find(m => m.name === selectedMonth);
+    if (!monthObj || !monthObj.expenses.length) {
+      alert('Nenhuma despesa para salvar.');
+      return;
+    }
+    // Salvar cruzamento para cada despesa categorizada
+    for (const exp of monthObj.expenses) {
+      if (exp.category) {
+        const desc = exp.title || exp.description;
+        fetchAuth('http://localhost:4000/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: desc, category: exp.category })
+        }, token);
+      }
+    }
+    try {
+      const res = await fetchAuth('http://localhost:4000/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(monthObj.expenses)
+      }, token);
+      if (!res.ok) throw new Error('Erro ao salvar despesas');
+      alert('Despesas salvas no banco!');
+      fetchExpenses();
+    } catch (err) {
+      alert('Erro ao salvar despesas: ' + err.message);
+    }
   };
 
 
@@ -100,6 +184,7 @@ function App() {
     }
   };
 
+  // Categorizar e salvar cruzamento no backend
   const handleCategorize = (idx, category) => {
     setMonths(months => {
       return months.map(m => {
@@ -107,6 +192,13 @@ function App() {
         const updated = [...m.expenses];
         updated[idx] = { ...updated[idx], category };
         setCategoryMemory(mem => ({ ...mem, [updated[idx].title]: category }));
+        // Salvar cruzamento no backend
+        const desc = updated[idx].title || updated[idx].description;
+        fetchAuth('http://localhost:4000/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: desc, category })
+        }, token);
         return { ...m, expenses: updated };
       });
     });
@@ -117,11 +209,11 @@ function App() {
     const cat = newCategory.trim();
     if (!cat) return;
     try {
-      const res = await fetch('http://localhost:4000/api/categories', {
+      const res = await fetchAuth('http://localhost:4000/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: cat })
-      });
+      }, token);
       if (res.status === 409) {
         alert('Categoria já existe');
         return;
@@ -138,11 +230,11 @@ function App() {
   const handleRemoveCategory = async (catName) => {
     try {
       // Buscar id da categoria
-      const res = await fetch('http://localhost:4000/api/categories');
+      const res = await fetchAuth('http://localhost:4000/api/categories', {}, token);
       const data = await res.json();
       const cat = data.find(c => c.name === catName);
       if (!cat) return;
-      await fetch(`http://localhost:4000/api/categories/${cat.id}`, { method: 'DELETE' });
+      await fetchAuth(`http://localhost:4000/api/categories/${cat.id}`, { method: 'DELETE' }, token);
       fetchCategories();
     } catch (err) {
       alert('Erro ao remover categoria: ' + err.message);
@@ -193,9 +285,16 @@ function App() {
     e.target.value = '';
   };
 
+  if (!token) {
+    return <AuthForm onAuth={tk => { setToken(tk); localStorage.setItem('jwt_token', tk); }} />;
+  }
+
   return (
     <div className="container">
-      <h1>Credit Card Expense Analyzer</h1>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <h1>Credit Card Expense Analyzer</h1>
+        <button onClick={handleLogout} style={{padding:'0.4em 1em', borderRadius:6, border:'none', background:'#e91e63', color:'#fff', fontWeight:600}}>Logout</button>
+      </div>
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -208,7 +307,7 @@ function App() {
         marginRight: 'auto',
       }}>
         <div style={{width: '100%'}}>
-      <CSVUpload onUpload={fetchExpenses} />
+  <CSVUpload onData={handleCSV} />
         </div>
         <button onClick={handleSaveExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#4caf50', color: '#fff', fontWeight: 600}}>Save Results</button>
         <button onClick={handleLoadExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#2196f3', color: '#fff', fontWeight: 600}}>Load Saved</button>
