@@ -130,3 +130,62 @@ select {
   background: #fafbfc;
   color: #222;
 }
+
+/* Dark Mode Styles */
+.dark {
+  background-color: #121212;
+  color: #ffffff;
+}
+
+.dark body {
+  background-color: #121212;
+  color: #ffffff;
+}
+
+.dark table {
+  background: #1e1e1e;
+  color: #ffffff;
+  border-collapse: separate;
+  border-spacing: 0;
+  box-shadow: 0 2px 16px rgba(255,255,255,0.07);
+}
+
+.dark th {
+  background: #333;
+  color: #ffffff;
+  border-bottom: 2px solid #555;
+}
+
+.dark td {
+  border-bottom: 1px solid #333;
+}
+
+.dark tr:nth-child(even) td {
+  background: #2a2a2a;
+}
+
+.dark tr:hover td {
+  background: #333;
+}
+
+.dark select {
+  background: #333;
+  color: #ffffff;
+  border: 1px solid #555;
+}
+
+.dark select:focus {
+  border: 1.5px solid #646cff;
+}
+
+.dark .summary {
+  color: #ccc;
+}
+
+.dark .read-the-docs {
+  color: #aaa;
+}
+
+.dark th, .dark td {
+  color: #ffffff;
+}

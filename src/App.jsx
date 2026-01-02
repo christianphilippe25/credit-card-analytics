@@ -21,12 +21,29 @@ function App() {
   const [newCategory, setNewCategory] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [hideValues, setHideValues] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [activeTab, setActiveTab] = useState('geral');
 
   useEffect(() => {
     const mem = localStorage.getItem(CATEGORY_KEY);
     if (mem) setCategoryMemory(JSON.parse(mem));
     const cat = localStorage.getItem('expense-categories-list');
     if (cat) setCategories(JSON.parse(cat));
+    // Auto-load saved expenses
+    const saved = localStorage.getItem(EXPENSES_KEY);
+    if (saved) {
+      const loaded = JSON.parse(saved);
+      if (Array.isArray(loaded)) {
+        setMonths(loaded);
+        setSelectedMonth(loaded.length ? loaded[0].name : null);
+      } else if (loaded.months) {
+        setMonths(loaded.months || []);
+        setCategories(loaded.categories || [
+          'Alimentação', 'Transporte', 'Compras', 'Contas', 'Outro', 'assinatura', 'pet', 'carro', 'casa', 'Saúde'
+        ]);
+        setSelectedMonth((loaded.months && loaded.months.length) ? loaded.months[0].name : null);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -36,6 +53,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('expense-categories-list', JSON.stringify(categories));
   }, [categories]);
+
+  useEffect(() => {
+    document.body.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
 
   // Save/load expenses to localStorage
@@ -160,66 +181,132 @@ function App() {
     e.target.value = '';
   };
 
+  if (!months.length) {
+    return (
+      <div className="container">
+        <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000 }}>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            style={{
+              padding: '0.5em',
+              borderRadius: '50%',
+              border: 'none',
+              background: darkMode ? '#333' : '#fff',
+              color: darkMode ? '#fff' : '#000',
+              cursor: 'pointer',
+              fontSize: '1.2em',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }}
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
+        <h1>Credit Card Expense Analyzer</h1>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 16,
+          margin: '2em 0',
+          maxWidth: 400,
+          width: '100%',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          textAlign: 'center'
+        }}>
+          <p>Bem-vindo! Carregue seus dados de gastos para começar a análise.</p>
+          <div style={{width: '100%'}}>
+            <CSVUpload onData={(text, file) => handleCSV(text, file?.name)} />
+          </div>
+          <button onClick={handleLoadExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#2196f3', color: '#fff', fontWeight: 600}}>Carregar Dados Salvos</button>
+          <label style={{width: '100%'}}>
+            <input type="file" accept="application/json" style={{ display: 'none' }} onChange={handleImportAll} id="import-all-input" />
+            <span style={{width: '100%', display: 'inline-block'}}>
+              <button type="button" onClick={() => document.getElementById('import-all-input').click()} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#009688', color: '#fff', fontWeight: 600}}>Importar Arquivo JSON</button>
+            </span>
+          </label>
+        </div>
+        <footer style={{marginTop: 32, fontSize: 12, color: '#888'}}>Your categories and results are saved locally in your browser.</footer>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
-      <h1>Credit Card Expense Analyzer</h1>
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 16,
-        margin: '2em 0 1em 0',
-        maxWidth: 340,
-        width: '100%',
-        marginLeft: 'auto',
-        marginRight: 'auto',
-      }}>
-        <div style={{width: '100%'}}>
-          <CSVUpload onData={(text, file) => handleCSV(text, file?.name)} />
-        </div>
-        <button onClick={handleSaveExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#4caf50', color: '#fff', fontWeight: 600}}>Save Results</button>
-        <button onClick={handleLoadExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#2196f3', color: '#fff', fontWeight: 600}}>Load Saved</button>
-        <button onClick={handleExportAll} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#673ab7', color: '#fff', fontWeight: 600}}>Exportar Dados</button>
-        <label style={{width: '100%'}}>
-          <input type="file" accept="application/json" style={{ display: 'none' }} onChange={handleImportAll} id="import-all-input" />
-          <span style={{width: '100%', display: 'inline-block'}}>
-            <button type="button" onClick={() => document.getElementById('import-all-input').click()} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#009688', color: '#fff', fontWeight: 600}}>Importar Dados</button>
-          </span>
-        </label>
+      <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000 }}>
         <button
-          onClick={() => setHideValues(v => !v)}
-          style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: hideValues ? '#888' : '#ff9800', color: '#fff', fontWeight: 600}}
+          onClick={() => setDarkMode(!darkMode)}
+          style={{
+            padding: '0.5em',
+            borderRadius: '50%',
+            border: 'none',
+            background: darkMode ? '#333' : '#fff',
+            color: darkMode ? '#fff' : '#000',
+            cursor: 'pointer',
+            fontSize: '1.2em',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
         >
-          {hideValues ? 'Mostrar valores' : 'Ocultar valores'}
+          {darkMode ? '☀️' : '🌙'}
         </button>
       </div>
-      <form onSubmit={handleAddCategory} style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        margin: '1em 0 2em 0',
-        maxWidth: 340,
-        width: '100%',
-        marginLeft: 'auto',
-        marginRight: 'auto',
-      }}>
-        <input
-          type="text"
-          value={newCategory}
-          onChange={e => setNewCategory(e.target.value)}
-          placeholder="Add new category"
-          style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', width: '100%'}}
-        />
-        <button type="submit" style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#646cff', color: '#fff', fontWeight: 600}}>Add Category</button>
-      </form>
+      <h1>Credit Card Expense Analyzer</h1>
 
-      {months.length > 0 && (() => {
-        // Sort months by name (YYYY-MM) ascending
+      {/* Tabs */}
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '1em 0' }}>
+        <button
+          onClick={() => setActiveTab('geral')}
+          style={{
+            padding: '0.5em 1em',
+            border: 'none',
+            background: activeTab === 'geral' ? '#646cff' : '#f0f0f0',
+            color: activeTab === 'geral' ? '#fff' : '#000',
+            cursor: 'pointer',
+            borderRadius: '4px 0 0 4px',
+            fontWeight: 600
+          }}
+        >
+          Dados Gerais
+        </button>
+        <button
+          onClick={() => setActiveTab('mensal')}
+          style={{
+            padding: '0.5em 1em',
+            border: 'none',
+            background: activeTab === 'mensal' ? '#646cff' : '#f0f0f0',
+            color: activeTab === 'mensal' ? '#fff' : '#000',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}
+        >
+          Análise Mensal
+        </button>
+        <button
+          onClick={() => setActiveTab('categorias')}
+          style={{
+            padding: '0.5em 1em',
+            border: 'none',
+            background: activeTab === 'categorias' ? '#646cff' : '#f0f0f0',
+            color: activeTab === 'categorias' ? '#fff' : '#000',
+            cursor: 'pointer',
+            borderRadius: '0 4px 4px 0',
+            fontWeight: 600
+          }}
+        >
+          Gerenciar Dados
+        </button>
+      </div>
+
+      {activeTab === 'geral' && months.length > 0 && (() => {
         const sortedMonths = [...months].sort((a, b) => (a.name > b.name ? 1 : a.name < b.name ? -1 : 0));
+        return <FullSummary months={sortedMonths} darkMode={darkMode} />;
+      })()}
+
+      {activeTab === 'mensal' && months.length > 0 && (() => {
+        const sortedMonths = [...months].sort((a, b) => (a.name > b.name ? 1 : a.name < b.name ? -1 : 0));
+        const all = months.find(m => m.name === selectedMonth)?.expenses || [];
+        const filtered = categoryFilter ? all.filter(e => e.category === categoryFilter) : all;
         return <>
-          <FullSummary months={sortedMonths} />
           <div style={{margin: '1em 0'}}>
             <label htmlFor="month-select"><b>Select Month:</b> </label>
             <select id="month-select" value={selectedMonth || ''} onChange={e => setSelectedMonth(e.target.value)}>
@@ -228,15 +315,8 @@ function App() {
               ))}
             </select>
           </div>
-        </>;
-      })()}
-
-      {selectedMonth && (() => {
-        const all = months.find(m => m.name === selectedMonth)?.expenses || [];
-        const filtered = categoryFilter ? all.filter(e => e.category === categoryFilter) : all;
-        return <>
-          <ExpenseSummary expenses={filtered} hideValues={hideValues} />
-          <ExpenseCharts expenses={filtered} hideValues={hideValues} />
+          <ExpenseSummary expenses={filtered} hideValues={hideValues} darkMode={darkMode} />
+          <ExpenseCharts expenses={filtered} hideValues={hideValues} darkMode={darkMode} />
           <div style={{display: 'flex', justifyContent: 'flex-end', alignItems: 'center', margin: '1em 0', maxWidth: 900, marginLeft: 'auto', marginRight: 'auto'}}>
             <label htmlFor="category-filter" style={{marginRight: 8}}><b>Filtrar por categoria:</b></label>
             <select
@@ -254,6 +334,74 @@ function App() {
           <ExpenseTable expenses={filtered} onCategorize={handleCategorize} categories={categories} hideValues={hideValues} />
         </>;
       })()}
+
+      {activeTab === 'categorias' && (
+        <>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+            margin: '1em 0',
+            maxWidth: 340,
+            width: '100%',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            <div style={{width: '100%'}}>
+              <CSVUpload onData={(text, file) => handleCSV(text, file?.name)} />
+            </div>
+          </div>
+          <form onSubmit={handleAddCategory} style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '1em 0 2em 0',
+            maxWidth: 340,
+            width: '100%',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            <input
+              type="text"
+              value={newCategory}
+              onChange={e => setNewCategory(e.target.value)}
+              placeholder="Add new category"
+              style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', width: '100%'}}
+            />
+            <button type="submit" style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#646cff', color: '#fff', fontWeight: 600}}>Add Category</button>
+          </form>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+            margin: '1em 0',
+            maxWidth: 340,
+            width: '100%',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            <button onClick={handleSaveExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#4caf50', color: '#fff', fontWeight: 600}}>Save Results</button>
+            <button onClick={handleLoadExpenses} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#2196f3', color: '#fff', fontWeight: 600}}>Load Saved</button>
+            <button onClick={handleExportAll} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#673ab7', color: '#fff', fontWeight: 600}}>Exportar Dados</button>
+            <label style={{width: '100%'}}>
+              <input type="file" accept="application/json" style={{ display: 'none' }} onChange={handleImportAll} id="import-all-input" />
+              <span style={{width: '100%', display: 'inline-block'}}>
+                <button type="button" onClick={() => document.getElementById('import-all-input').click()} style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: '#009688', color: '#fff', fontWeight: 600}}>Importar Dados</button>
+              </span>
+            </label>
+            <button
+              onClick={() => setHideValues(v => !v)}
+              style={{width: '100%', padding: '0.5em 1.2em', borderRadius: 6, border: 'none', background: hideValues ? '#888' : '#ff9800', color: '#fff', fontWeight: 600}}
+            >
+              {hideValues ? 'Mostrar valores' : 'Ocultar valores'}
+            </button>
+          </div>
+        </>
+      )}
       <footer style={{marginTop: 32, fontSize: 12, color: '#888'}}>Your categories and results are saved locally in your browser.</footer>
     </div>
   );

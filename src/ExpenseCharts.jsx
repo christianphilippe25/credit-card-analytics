@@ -12,7 +12,7 @@ import {
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
-export default function ExpenseCharts({ expenses, hideValues }) {
+export default function ExpenseCharts({ expenses, hideValues, darkMode }) {
   if (!expenses.length) return null;
 
 
@@ -51,42 +51,48 @@ export default function ExpenseCharts({ expenses, hideValues }) {
     if (!m) return;
     byMonth[m] = (byMonth[m] || 0) + (e.amount || 0);
   });
-  const barData = {
-    labels: Object.keys(byMonth),
-    datasets: [
-      {
-        label: 'Total by Month',
-        data: Object.values(byMonth),
-        backgroundColor: '#2196f3',
-      },
-    ],
+
+  const textColor = darkMode ? '#ffffff' : '#000000';
+  const bgColor = darkMode ? '#1e1e1e' : '#ffffff';
+
+  const pieOptions = hideValues ? {
+    plugins: {
+      legend: { display: false, labels: { color: textColor } },
+      tooltip: { enabled: false }
+    }
+  } : {
+    plugins: {
+      legend: { labels: { color: textColor } }
+    }
   };
 
-  const chartOptions = hideValues ? {
+  const barOptions = hideValues ? {
     plugins: {
       legend: { display: false },
       tooltip: { enabled: false }
     },
-    scales: { y: { beginAtZero: true, display: false } },
+    scales: {
+      x: { ticks: { color: textColor } },
+      y: { beginAtZero: true, display: false, ticks: { color: textColor } }
+    },
     elements: { bar: { backgroundColor: '#bbb' } }
   } : {
     plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true } }
+    scales: {
+      x: { ticks: { color: textColor } },
+      y: { beginAtZero: true, ticks: { color: textColor } }
+    }
   };
 
   return (
     <div style={{display: 'flex', flexWrap: 'wrap', gap: 32, justifyContent: 'center', margin: '2em 0'}}>
-      <div style={{width: 320}}>
-        <h4>Expenses by Category (Pie)</h4>
-        <Pie data={pieData} options={hideValues ? { plugins: { legend: { display: false }, tooltip: { enabled: false } } } : {}} />
+      <div style={{width: 320, background: bgColor, padding: '1em', borderRadius: '8px'}}>
+        <h4 style={{color: textColor}}>Expenses by Category (Pie)</h4>
+        <Pie data={pieData} options={pieOptions} />
       </div>
-      <div style={{width: 400}}>
-        <h4>Expenses by Category (Bar)</h4>
-        <Bar data={barCategoryData} options={chartOptions} />
-      </div>
-      <div style={{width: 400}}>
-        <h4>Expenses by Month</h4>
-        <Bar data={barData} options={chartOptions} />
+      <div style={{width: 400, background: bgColor, padding: '1em', borderRadius: '8px'}}>
+        <h4 style={{color: textColor}}>Expenses by Category (Bar)</h4>
+        <Bar data={barCategoryData} options={barOptions} />
       </div>
     </div>
   );

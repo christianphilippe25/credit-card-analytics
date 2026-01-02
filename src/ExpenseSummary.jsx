@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ExpenseSummary({ expenses, hideValues }) {
+export default function ExpenseSummary({ expenses, hideValues, darkMode }) {
   if (!expenses.length) return null;
   const total = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const byCategory = expenses.reduce((acc, e) => {
@@ -13,21 +13,22 @@ export default function ExpenseSummary({ expenses, hideValues }) {
     <div style={{
       maxWidth: 400,
       margin: '2em auto',
-      background: '#fff',
+      background: darkMode ? '#1e1e1e' : '#fff',
       borderRadius: 12,
-      boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+      boxShadow: darkMode ? '0 2px 8px rgba(255,255,255,0.07)' : '0 2px 8px rgba(0,0,0,0.07)',
       padding: '1.5em 2em',
       textAlign: 'left',
+      color: darkMode ? '#fff' : '#333'
     }}>
-      <h3 style={{marginTop: 0, marginBottom: 16, color: '#333'}}>Summary</h3>
+      <h3 style={{marginTop: 0, marginBottom: 16, color: darkMode ? '#ccc' : '#333'}}>Summary</h3>
       <div className='summary' style={{fontSize: 18, fontWeight: 600, marginBottom: 16}}>
         Total: <span style={{color: '#4caf50'}}>{hideValues ? '••••••' : total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
       </div>
-      <table style={{width: '100%', borderCollapse: 'collapse'}}>
+      <table style={{width: '100%', borderCollapse: 'collapse', color: darkMode ? '#fff' : '#333'}}>
         <thead>
           <tr>
-            <th style={{textAlign: 'left', color: '#888', fontWeight: 500, fontSize: 14, paddingBottom: 4}}>Category</th>
-            <th style={{textAlign: 'right', color: '#888', fontWeight: 500, fontSize: 14, paddingBottom: 4}}>Amount</th>
+            <th style={{textAlign: 'left', color: darkMode ? '#aaa' : '#888', fontWeight: 500, fontSize: 14, paddingBottom: 4}}>Category</th>
+            <th style={{textAlign: 'right', color: darkMode ? '#aaa' : '#888', fontWeight: 500, fontSize: 14, paddingBottom: 4}}>Amount</th>
           </tr>
         </thead>
         <tbody>
