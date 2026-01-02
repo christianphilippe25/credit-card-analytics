@@ -23,6 +23,8 @@ function App() {
   const [hideValues, setHideValues] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('geral');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newExpense, setNewExpense] = useState({ date: '', title: '', amount: '', category: '' });
 
   useEffect(() => {
     const mem = localStorage.getItem(CATEGORY_KEY);
@@ -135,6 +137,22 @@ function App() {
       setCategories([...categories, cat]);
       setNewCategory('');
     }
+  };
+
+  const handleAddExpense = (e) => {
+    e.preventDefault();
+    const { date, title, amount, category } = newExpense;
+    if (!date || !title || !amount || !selectedMonth) return;
+    const expense = {
+      date,
+      title,
+      amount: parseFloat(amount),
+      category: category || ''
+    };
+    setMonths(prev => prev.map(m => m.name === selectedMonth ? { ...m, expenses: [...m.expenses, expense] } : m));
+    if (category) setCategoryMemory(mem => ({ ...mem, [title]: category }));
+    setNewExpense({ date: '', title: '', amount: '', category: '' });
+    setShowAddModal(false);
   };
 
   // Exporta todos os dados (meses, categorias, memória de categorias) para um arquivo JSON
@@ -317,6 +335,26 @@ function App() {
           </div>
           <ExpenseSummary expenses={filtered} hideValues={hideValues} darkMode={darkMode} />
           <ExpenseCharts expenses={filtered} hideValues={hideValues} darkMode={darkMode} />
+          
+          <div style={{display: 'flex', justifyContent: "flex-start"}}>
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{
+                marginLeft: '1em',
+                padding: '0.5em 1em',
+                borderRadius: 6,
+                border: 'none',
+                background: '#4caf50',
+                color: '#fff',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+              disabled={!selectedMonth}
+            >
+              Adicionar Gasto
+            </button>
+          </div>
+
           <div style={{display: 'flex', justifyContent: 'flex-end', alignItems: 'center', margin: '1em 0', maxWidth: 900, marginLeft: 'auto', marginRight: 'auto'}}>
             <label htmlFor="category-filter" style={{marginRight: 8}}><b>Filtrar por categoria:</b></label>
             <select
@@ -401,6 +439,75 @@ function App() {
             </button>
           </div>
         </>
+      )}
+      {showAddModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: darkMode ? '#1e1e1e' : '#fff',
+            padding: '2em',
+            borderRadius: 12,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            maxWidth: 400,
+            width: '90%',
+            color: darkMode ? '#fff' : '#000'
+          }}>
+            <h3>Adicionar Gasto</h3>
+            <form onSubmit={handleAddExpense}>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 12}}>
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={e => setNewExpense({ ...newExpense, date: e.target.value })}
+                  placeholder="Data"
+                  style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', background: darkMode ? '#333' : '#fff', color: darkMode ? '#fff' : '#000'}}
+                  required
+                />
+                <input
+                  type="text"
+                  value={newExpense.title}
+                  onChange={e => setNewExpense({ ...newExpense, title: e.target.value })}
+                  placeholder="Descrição"
+                  style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', background: darkMode ? '#333' : '#fff', color: darkMode ? '#fff' : '#000'}}
+                  required
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newExpense.amount}
+                  onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })}
+                  placeholder="Valor"
+                  style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', background: darkMode ? '#333' : '#fff', color: darkMode ? '#fff' : '#000'}}
+                  required
+                />
+                <select
+                  value={newExpense.category}
+                  onChange={e => setNewExpense({ ...newExpense, category: e.target.value })}
+                  style={{padding: '0.5em', borderRadius: 6, border: '1px solid #ccc', background: darkMode ? '#333' : '#fff', color: darkMode ? '#fff' : '#000'}}
+                >
+                  <option value="">Selecione categoria</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end'}}>
+                  <button type="button" onClick={() => setShowAddModal(false)} style={{padding: '0.5em 1em', borderRadius: 6, border: '1px solid #ccc', background: '#f0f0f0', cursor: 'pointer'}}>Cancelar</button>
+                  <button type="submit" style={{padding: '0.5em 1em', borderRadius: 6, border: 'none', background: '#4caf50', color: '#fff', cursor: 'pointer'}}>Adicionar</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
       <footer style={{marginTop: 32, fontSize: 12, color: '#888'}}>Your categories and results are saved locally in your browser.</footer>
     </div>

@@ -40,17 +40,17 @@ export default function FullSummary({ months, darkMode }) {
     datasets,
   };
 
-  // Total expenses chart for last 12 months
+  // Stacked bar chart: expenses by category per month
   const last12Months = months.slice(-12);
-  const totalLabels = last12Months.map(m => m.name);
-  const totalData = last12Months.map(m => m.expenses.reduce((sum, e) => sum + (e.amount || 0), 0));
+  const barLabels = last12Months.map(m => m.name);
+  const barDatasets = allCategories.map((cat, i) => ({
+    label: cat,
+    data: last12Months.map(m => m.expenses.filter(e => (e.category || 'Uncategorized') === cat).reduce((sum, e) => sum + (e.amount || 0), 0)),
+    backgroundColor: colors[i % colors.length],
+  }));
   const barData = {
-    labels: totalLabels,
-    datasets: [{
-      label: 'Total Gastos',
-      data: totalData,
-      backgroundColor: '#2196f3',
-    }],
+    labels: barLabels,
+    datasets: barDatasets,
   };
 
   const textColor = darkMode ? '#ffffff' : '#333';
@@ -70,8 +70,8 @@ export default function FullSummary({ months, darkMode }) {
   const barOptions = {
     plugins: { legend: { display: false } },
     scales: {
-      x: { ticks: { color: textColor } },
-      y: { beginAtZero: true, ticks: { color: textColor } }
+      x: { stacked: true, ticks: { color: textColor } },
+      y: { stacked: true, ticks: { color: textColor } }
     },
     responsive: true,
     maintainAspectRatio: false,
@@ -86,7 +86,7 @@ export default function FullSummary({ months, darkMode }) {
         </div>
       </div>
       <div style={{flex: 1}}>
-        <h2 style={{marginTop: 0, color: textColor}}>Total de Gastos por Mês</h2>
+        <h2 style={{marginTop: 0, color: textColor}}>Gastos por Categoria por Mês</h2>
         <div style={{maxHeight: 380, minHeight: 260, height: 350, overflow: 'auto'}}>
           <Bar data={barData} options={barOptions} height={350} />
         </div>
